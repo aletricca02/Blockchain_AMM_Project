@@ -183,7 +183,7 @@ class PanicLP:
 
 class WhaleTrader:
     """Trader that executes large volume operations (useful for chaotic scenarios)"""
-    def __init__(self, name, capital_x=10000, capital_y=10000):
+    def __init__(self, name, capital_x=20, capital_y=40000):
         self.name = name
         self.capital_x = capital_x
         self.capital_y = capital_y

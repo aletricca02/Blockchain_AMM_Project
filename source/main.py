@@ -21,6 +21,8 @@ def main():
         print("5. Show graphs")
         print("6. Save results")
         print("7. See statistics")
+        print("8. Whale dump")
+        print("9. Whale pump")
         print("0. Exit")
         print("="*30)
         
@@ -69,6 +71,20 @@ def main():
                 
             elif choice == "7":
                 sim.print_stats()
+
+            elif choice == "8":
+                try:
+                    percent = float(input("Dump % of whale's ETH (0-100): ")) / 100
+                    sim.whale_dump(percent)
+                except ValueError:
+                    print("Invalid value")
+
+            elif choice == "9":
+                try:
+                    percent = float(input("Pump % of whale's USDC (0-100): ")) / 100
+                    sim.whale_pump(percent)
+                except ValueError:
+                    print("Invalid value")
 
             elif choice == "0":
                 confirm = input("Do you really want to exit? (y/n): ")

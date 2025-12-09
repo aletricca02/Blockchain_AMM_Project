@@ -3,8 +3,8 @@
 
 import random
 from amm import UniswapAMM
-from trader import Trader
-from agents import Arbitrageur, PanicLP
+from trader import Trader, SmartTrader
+from agents import Arbitrageur, PanicLP, WhaleTrader
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -27,6 +27,7 @@ class Simulation:
         """Initialize simulation with default parameters."""
 
         # Initialize AMM with 100 ETH and 200,000 USDC (price = 2000 USDC/ETH)
+        # Total pool value: $400,000
         self.amm = UniswapAMM(token_x="ETH", token_y="USDC", reserve_x=100, reserve_y=200000)
         
         # External market price (independent from AMM)
@@ -35,17 +36,22 @@ class Simulation:
         # Simulation step counter
         self.step_count = 0
         
-        # Retail traders with random behavior
+        # Retail traders with random behavior (~2-3% of pool each)
         self.traders = [
-            Trader("Alice", eth_amount=5, usdc_amount=1000),
-            Trader("Bob", eth_amount=2, usdc_amount=3000)
+            Trader("Alice", eth_amount=5, usdc_amount=1000),     # ~$11k (2.75%)
+            Trader("Bob", eth_amount=2, usdc_amount=3000),       # ~$7k (1.75%)
+            SmartTrader("Charlie", eth_amount=10, usdc_amount=10000, max_slippage=0.02)  # ~$30k (7.5%)
         ]
         
-        # Arbitrageur with substantial capital to close price gaps
-        self.arb = Arbitrageur("ArbBot", capital_x=100, capital_y=200000)
+        # Arbitrageur with substantial capital to close price gaps (~100% of pool)
+        # Needs large capital because it must be able to close any gap
+        self.arb = Arbitrageur("ArbBot", capital_x=100, capital_y=200000)  # ~$400k (100%)
+        
+        # Whale trader for manual pump/dump operations (~20% of pool)
+        self.whale = WhaleTrader("Moby", capital_x=20, capital_y=40000)  # ~$80k (20%)
         
         # Liquidity provider that panics under high volatility (owns 50% of pool)
-        self.lp = PanicLP("BigWhale", 0.5, self.amm)
+        self.lp = PanicLP("PanicLP", 0.5, self.amm)
         
         # Data logging for analysis
         self.price_log = []
@@ -98,6 +104,34 @@ class Simulation:
         print(f"⚡ MARKET SHOCK APPLIED!")
         print(f"⚡ Price: {old_price:.2f} → {self.market_price:.2f} USDC/ETH ({percent:+.1%})")
         print(f"{'⚡'*30}\n")
+
+    def whale_dump(self, percent=0.5):
+        """
+        Trigger whale dump event (whale sells ETH).
+        
+        Args:
+            percent: Percentage of whale's ETH to dump (0-1, e.g., 0.5 = 50%)
+        """
+        print(f"\n{'🐋'*30}")
+        print(f"🐋 WHALE DUMP EVENT!")
+        print(f"🐋 Whale selling {percent:.0%} of ETH holdings")
+        print(f"{'🐋'*30}\n")
+        
+        self.whale.dump(self.amm, percent=percent)
+    
+    def whale_pump(self, percent=0.5):
+        """
+        Trigger whale pump event (whale buys ETH).
+        
+        Args:
+            percent: Percentage of whale's USDC to use for buying (0-1)
+        """
+        print(f"\n{'🐋'*30}")
+        print(f"🐋 WHALE PUMP EVENT!")
+        print(f"🐋 Whale buying ETH with {percent:.0%} of USDC")
+        print(f"{'🐋'*30}\n")
+        
+        self.whale.pump(self.amm, percent=percent)
 
     def step(self, verbose=True):
         """
