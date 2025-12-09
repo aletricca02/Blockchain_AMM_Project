@@ -20,6 +20,7 @@ def main():
         print("4. Current status")
         print("5. Show graphs")
         print("6. Save results")
+        print("7. See statistics")
         print("0. Exit")
         print("="*30)
         
@@ -47,7 +48,7 @@ def main():
                     shock_pct = float(input("Shock % (es. -30 o +25): "))
                     shock = shock_pct / 100
                     confirm = input(f"Do you confirm {shock_pct:+.1f}% shock? (y/n): ")
-                    if confirm.lower() == 's':
+                    if confirm.lower() == 'y':
                         sim.apply_market_shock(shock)
                         print(f"{shock_pct:+.1f}% shock applied")
                 except ValueError:
@@ -66,6 +67,9 @@ def main():
                 sim.save_results(filename)
                 print(f"Results saved in {filename}")
                 
+            elif choice == "7":
+                sim.print_stats()
+
             elif choice == "0":
                 confirm = input("Do you really want to exit? (y/n): ")
                 if confirm.lower() == 'y':

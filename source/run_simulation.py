@@ -27,7 +27,7 @@ class Simulation:
         """Initialize simulation with default parameters."""
 
         # Initialize AMM with 100 ETH and 200,000 USDC (price = 2000 USDC/ETH)
-        self.amm = UniswapAMM("ETH", "USDC", 100, 200000)
+        self.amm = UniswapAMM(token_x="ETH", token_y="USDC", reserve_x=100, reserve_y=200000)
         
         # External market price (independent from AMM)
         self.market_price = 2000
