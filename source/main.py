@@ -1,18 +1,41 @@
 # Il file implementa il menù interattivo per controllare la simulazione degli AMM.
 
-from amm import UniswapAMM
+from amm_uniswap import UniswapAMM
+from amm_constant_sum import ConstantSumAMM
 from trader import Trader
 from run_simulation import Simulation
 
-from run_simulation import Simulation
 import sys
 
 def main():
-    sim = Simulation()
+
+    print("\n" + "="*60)
+    print("          AMM SIMULATION - Choose AMM Type")
+    print("="*60)
+    print("1. Uniswap V2 (Constant Product: x × y = k)")
+    print("2. Constant Sum (x + y = k)")
+    print("="*60)
+    
+    while True:
+        choice = input("Choose AMM type (1 or 2): ").strip()
+        if choice == "1":
+            amm_type = "uniswap"
+            print("\n✓ Using Uniswap V2 (Constant Product)")
+            break
+        elif choice == "2":
+            amm_type = "constant_sum"
+            print("\n✓ Using Constant Sum")
+            break
+        else:
+            print("Invalid choice, please enter 1 or 2")
+
+    # Create simulation with AMM selected
+    sim = Simulation(amm_type=amm_type)
     
     while True:
         print("\n" + "="*30)
         print("      AMM SIMULATION MENU")
+        print(f"   Current AMM: {sim.amm_type.upper()}")
         print("="*30)
         print("1. Go forward 1 step")
         print("2. Go forward N steps")

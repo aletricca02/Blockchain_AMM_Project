@@ -2,7 +2,8 @@
 # Coordinates interactions between AMM, traders, arbitrageurs, and liquidity providers.
 
 import random
-from amm import UniswapAMM
+from amm_uniswap import UniswapAMM
+from amm_constant_sum import ConstantSumAMM
 from trader import Trader, SmartTrader
 from agents import Arbitrageur, PanicLP, WhaleTrader
 import matplotlib.pyplot as plt
@@ -23,12 +24,27 @@ class Simulation:
         price_log: Historical data log
     """
     
-    def __init__(self):
-        """Initialize simulation with default parameters."""
+    def __init__(self, amm_type="uniswap"):
+        """Initialize simulation with default parameters.
+        
+        Args:
+            amm_type: Type of AMM to use ("uniswap" or "constant_sum")
+        """
 
-        # Initialize AMM with 100 ETH and 200,000 USDC (price = 2000 USDC/ETH)
+        # Initialize AMM based on type, with 100 ETH and 200,000 USDC (price = 2000 USDC/ETH)
         # Total pool value: $400,000
-        self.amm = UniswapAMM(token_x="ETH", token_y="USDC", reserve_x=100, reserve_y=200000)
+        if amm_type == "uniswap":
+            self.amm = UniswapAMM(token_x="ETH", token_y="USDC", 
+                                  reserve_x=100, reserve_y=200000)
+        elif amm_type == "constant_sum":
+             # WARNING: This will trigger instability warning
+            # This is INTENTIONAL to demonstrate CS is unsuitable for volatile pairs
+            self.amm = ConstantSumAMM(token_x="ETH", token_y="USDC", 
+                                      reserve_x=100, reserve_y=200000)
+        else:
+            raise ValueError(f"Unknown AMM type: {amm_type}. Use 'uniswap' or 'constant_sum'")
+        
+        self.amm_type = amm_type  # <-- Salva il tipo per riferimento
         
         # External market price (independent from AMM)
         self.market_price = 2000

@@ -217,3 +217,25 @@ class SmartTrader(Trader):
         
         # Proceed with the trade
         super()._try_buy(amm, verbose)
+
+    def _try_sell(self, amm, verbose):
+        """Sells only if slippage is acceptable"""
+        if not self.can_afford("ETH", self.min_trade_eth):
+            return
+        
+        max_sell = min(self.wallet["ETH"], self.max_trade_eth)
+        eth_in = random.uniform(self.min_trade_eth, max_sell)
+        
+        # Calculate expected slippage
+        current_price = amm.get_price_x_to_y()
+        expected_usdc = eth_in * current_price
+        actual_usdc = amm.calculate_swap_output(eth_in, amm.x, amm.y)
+        slippage = abs(actual_usdc - expected_usdc) / expected_usdc
+        
+        if slippage > self.max_slippage:
+            if verbose:
+                print(f"[{self.name}] Slippage too high ({slippage:.2%}), skip sell")
+            return
+        
+        # Proceed with the trade
+        super()._try_sell(amm, verbose)
