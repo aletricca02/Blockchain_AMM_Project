@@ -563,21 +563,6 @@ class ExperimentRunner:
         ax2.legend(title='AMM Type')
         ax2.grid(axis='y', alpha=0.3)
         
-        # 3. K Growth (fee accumulation)
-        ax3 = axes[0, 2]
-        pivot_mean = df.pivot(index='experiment', columns='amm_type', 
-                            values='k_growth_percent_mean')
-        pivot_std = df.pivot(index='experiment', columns='amm_type', 
-                            values='k_growth_percent_std')
-        pivot_mean.plot(kind='bar', ax=ax3, color=['#3498db', '#e74c3c'], 
-                        yerr=pivot_std, capsize=4, error_kw={'linewidth': 2})
-        ax3.set_title('K Growth % (fee accumulation)', fontweight='bold')
-        ax3.set_ylabel('Percent')
-        ax3.set_xlabel('')
-        ax3.legend(title='AMM Type')
-        ax3.grid(axis='y', alpha=0.3)
-        ax3.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5)
-        
         # 4. Arbitrageur Profit
         ax4 = axes[1, 0]
         pivot_mean = df.pivot(index='experiment', columns='amm_type', 
@@ -607,22 +592,6 @@ class ExperimentRunner:
         ax5.legend(title='AMM Type')
         ax5.grid(axis='y', alpha=0.3)
         
-        # 6. Max Volatility
-        ax6 = axes[1, 2]
-        pivot_mean = df.pivot(index='experiment', columns='amm_type', 
-                            values='max_volatility_mean')
-        pivot_std = df.pivot(index='experiment', columns='amm_type', 
-                            values='max_volatility_std')
-        pivot_mean.plot(kind='bar', ax=ax6, color=['#3498db', '#e74c3c'], 
-                        yerr=pivot_std, capsize=4, error_kw={'linewidth': 2})
-        ax6.set_title('Max Volatility Experienced', fontweight='bold')
-        ax6.set_ylabel('Percent')
-        ax6.set_xlabel('')
-        ax6.legend(title='AMM Type')
-        ax6.grid(axis='y', alpha=0.3)
-        
-        plt.tight_layout()
-        
         # Save plot
         plot_path = os.path.join(self.output_dir, "comparative_analysis.png")
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
@@ -644,7 +613,6 @@ class ExperimentRunner:
             'price_stability_mean', 
             'k_growth_percent_mean', 
             'arb_profit_mean', 
-            'lp_panic_events_mean'
         ]
         
         metric_labels = [
@@ -652,7 +620,6 @@ class ExperimentRunner:
             'Price Stability',
             'K Growth %',
             'Arb Profit',
-            'LP Panic Events'
         ]
         
         # Create pivot table for each metric
@@ -686,81 +653,131 @@ class ExperimentRunner:
         plt.show()
 
     def plot_uncertainty_analysis(self):
-        """Plot showing variability across runs (error bars focus)"""
+        """Plot showing variability across runs - intuitive visualization of randomness impact"""
         if not self.results:
             print("No results to plot. Run experiments first!")
             return
         
         df = pd.DataFrame(self.results)
         
-        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-        fig.suptitle('Uncertainty Analysis: Variability Across Runs', 
-                    fontsize=16, fontweight='bold')
+        # Create 1x3 grid for clearer comparison
+        fig, axes = plt.subplots(1, 3, figsize=(20, 6))
+        fig.suptitle('Robustness Analysis: How Stable Are Results Across Different Random Seeds?', 
+                    fontsize=15, fontweight='bold')
         
-        # 1. Price Gap with error bars
-        ax1 = axes[0, 0]
-        for amm in ['uniswap', 'constant_sum']:
-            data = df[df['amm_type'] == amm]
-            x = range(len(data))
-            y = data['avg_price_gap_mean'].values
-            yerr = data['avg_price_gap_std'].values
-            
-            ax1.errorbar(x, y, yerr=yerr, marker='o', markersize=8, 
-                        capsize=5, capthick=2, linewidth=2,
-                        label=amm.capitalize())
+        experiments = df['experiment'].unique()
+        x = np.arange(len(experiments))
+        width = 0.35
         
-        ax1.set_xticks(range(len(data)))
-        ax1.set_xticklabels(data['experiment'].values, rotation=45, ha='right')
-        ax1.set_ylabel('Avg Price Gap (USDC)', fontweight='bold')
-        ax1.set_title('Price Gap Uncertainty')
-        ax1.legend()
-        ax1.grid(True, alpha=0.3)
+        # Prepare data
+        uni_data = df[df['amm_type'] == 'uniswap'].sort_values('experiment')
+        cs_data = df[df['amm_type'] == 'constant_sum'].sort_values('experiment')
         
-        # 2. Arbitrageur Profit with error bars
-        ax2 = axes[0, 1]
-        for amm in ['uniswap', 'constant_sum']:
-            data = df[df['amm_type'] == amm]
-            x = range(len(data))
-            y = data['arb_profit_mean'].values
-            yerr = data['arb_profit_std'].values
-            
-            ax2.errorbar(x, y, yerr=yerr, marker='s', markersize=8, 
-                        capsize=5, capthick=2, linewidth=2,
-                        label=amm.capitalize())
+        # ============================================================
+        # GRAPH 1: Average Price Gap (with error bars)
+        # ============================================================
+        ax1 = axes[0]
         
-        ax2.set_xticks(range(len(data)))
-        ax2.set_xticklabels(data['experiment'].values, rotation=45, ha='right')
-        ax2.set_ylabel('Arbitrageur Profit (USDC)', fontweight='bold')
-        ax2.set_title('Profit Uncertainty')
-        ax2.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5)
-        ax2.legend()
-        ax2.grid(True, alpha=0.3)
+        uni_gap_mean = uni_data['avg_price_gap_mean'].values
+        uni_gap_std = uni_data['avg_price_gap_std'].values
+        cs_gap_mean = cs_data['avg_price_gap_mean'].values
+        cs_gap_std = cs_data['avg_price_gap_std'].values
         
-        # 3. Coefficient of Variation (CV = std/mean) for Price Gap
-        ax3 = axes[1, 0]
-        for amm in ['uniswap', 'constant_sum']:
-            data = df[df['amm_type'] == amm]
-            cv = (data['avg_price_gap_std'] / data['avg_price_gap_mean'].abs()) * 100
-            
-            ax3.bar(range(len(data)), cv, alpha=0.7, label=amm.capitalize())
+        # Bars with error bars
+        bars1 = ax1.bar(x - width/2, uni_gap_mean, width, yerr=uni_gap_std,
+                    capsize=6, label='Uniswap', color='#3498db', 
+                    alpha=0.85, error_kw={'linewidth': 2.5, 'ecolor': '#2c3e50'})
+        bars2 = ax1.bar(x + width/2, cs_gap_mean, width, yerr=cs_gap_std,
+                    capsize=6, label='Constant Sum', color='#e74c3c', 
+                    alpha=0.85, error_kw={'linewidth': 2.5, 'ecolor': '#c0392b'})
         
-        ax3.set_xticks(range(len(data)))
-        ax3.set_xticklabels(data['experiment'].values, rotation=45, ha='right')
-        ax3.set_ylabel('Coefficient of Variation (%)', fontweight='bold')
-        ax3.set_title('Relative Variability (Price Gap)')
-        ax3.legend()
-        ax3.grid(axis='y', alpha=0.3)
+        ax1.set_ylabel('Avg Price Gap (USDC)', fontweight='bold', fontsize=12)
+        ax1.set_title('Price Efficiency: Mean ± Std Dev', fontweight='bold', fontsize=13)
+        ax1.set_xticks(x)
+        ax1.set_xticklabels([e.replace('_', ' ').title() for e in experiments], 
+                        rotation=25, ha='right', fontsize=10)
+        ax1.legend(fontsize=11, loc='upper left')
+        ax1.grid(axis='y', alpha=0.3, linestyle='--')
         
-        # 4. LP Exit Rate across runs
-        ax4 = axes[1, 1]
-        pivot = df.pivot(index='experiment', columns='amm_type', values='lp_exit_rate')
-        pivot.plot(kind='bar', ax=ax4, color=['#3498db', '#e74c3c'])
-        ax4.set_title('LP Exit Rate (% of runs where LP exited)')
-        ax4.set_ylabel('Exit Rate (0-1)', fontweight='bold')
-        ax4.set_xlabel('')
-        ax4.legend(title='AMM Type')
-        ax4.grid(axis='y', alpha=0.3)
-        ax4.set_ylim([0, 1.1])
+        # Interpretation box
+        ax1.text(0.98, 0.97, 
+                '↓ Lower bars = Better price accuracy\n'
+                '↓ Shorter error bars = More predictable',
+                transform=ax1.transAxes, verticalalignment='top', horizontalalignment='right',
+                fontsize=9.5, bbox=dict(boxstyle='round', facecolor='#fffacd', alpha=0.9))
+        
+        # ============================================================
+        # GRAPH 2: Arbitrage Profit (with error bars)
+        # ============================================================
+        ax2 = axes[1]
+        
+        uni_profit_mean = uni_data['arb_profit_mean'].values
+        uni_profit_std = uni_data['arb_profit_std'].values
+        cs_profit_mean = cs_data['arb_profit_mean'].values
+        cs_profit_std = cs_data['arb_profit_std'].values
+        
+        # Bars with error bars
+        bars1 = ax2.bar(x - width/2, uni_profit_mean, width, yerr=uni_profit_std,
+                    capsize=6, label='Uniswap', color='#3498db', 
+                    alpha=0.85, error_kw={'linewidth': 2.5, 'ecolor': '#2c3e50'})
+        bars2 = ax2.bar(x + width/2, cs_profit_mean, width, yerr=cs_profit_std,
+                    capsize=6, label='Constant Sum', color='#e74c3c', 
+                    alpha=0.85, error_kw={'linewidth': 2.5, 'ecolor': '#c0392b'})
+        
+        ax2.axhline(y=0, color='black', linestyle='--', linewidth=1.5, alpha=0.6)
+        ax2.set_ylabel('Arbitrageur Profit (USDC)', fontweight='bold', fontsize=12)
+        ax2.set_title('Arbitrage Opportunities: Mean ± Std Dev', fontweight='bold', fontsize=13)
+        ax2.set_xticks(x)
+        ax2.set_xticklabels([e.replace('_', ' ').title() for e in experiments], 
+                        rotation=25, ha='right', fontsize=10)
+        ax2.legend(fontsize=11, loc='upper left')
+        ax2.grid(axis='y', alpha=0.3, linestyle='--')
+        
+        # Interpretation box
+        ax2.text(0.98, 0.97,
+                '↑ Higher profit = More price inefficiency\n'
+                '↓ Shorter bars = More consistent behavior',
+                transform=ax2.transAxes, verticalalignment='top', horizontalalignment='right',
+                fontsize=9.5, bbox=dict(boxstyle='round', facecolor='#fffacd', alpha=0.9))
+        
+        # ============================================================
+        # GRAPH 3: Coefficient of Variation (Consistency Score)
+        # ============================================================
+        ax3 = axes[2]
+        
+        # Calculate CV (%) - measures relative variability
+        uni_cv = (uni_gap_std / np.abs(uni_gap_mean)) * 100
+        cs_cv = (cs_gap_std / np.abs(cs_gap_mean)) * 100
+        
+        # Clean up any inf/nan values
+        uni_cv = np.nan_to_num(uni_cv, nan=0.0, posinf=0.0, neginf=0.0)
+        cs_cv = np.nan_to_num(cs_cv, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        # Grouped bars
+        bars1 = ax3.bar(x - width/2, uni_cv, width,
+                    label='Uniswap', color='#3498db', alpha=0.85)
+        bars2 = ax3.bar(x + width/2, cs_cv, width,
+                    label='Constant Sum', color='#e74c3c', alpha=0.85)
+        
+        ax3.set_ylabel('Coefficient of Variation (%)', fontweight='bold', fontsize=12)
+        ax3.set_title('Result Stability Score', fontweight='bold', fontsize=13)
+        ax3.set_xticks(x)
+        ax3.set_xticklabels([e.replace('_', ' ').title() for e in experiments], 
+                        rotation=25, ha='right', fontsize=10)
+        ax3.legend(fontsize=11, loc='upper left')
+        ax3.grid(axis='y', alpha=0.3, linestyle='--')
+        
+        # Add reference line for "good" stability (CV < 10%)
+        ax3.axhline(y=10, color='green', linestyle=':', linewidth=2, alpha=0.5, 
+                label='Good stability (<10%)')
+        
+        # Interpretation box
+        ax3.text(0.98, 0.97,
+                'Lower % = More stable across seeds\n'
+                '<10% = Good consistency\n'
+                '>30% = High variability',
+                transform=ax3.transAxes, verticalalignment='top', horizontalalignment='right',
+                fontsize=9.5, bbox=dict(boxstyle='round', facecolor='#fffacd', alpha=0.9))
         
         plt.tight_layout()
         

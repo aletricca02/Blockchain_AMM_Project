@@ -1,6 +1,6 @@
 # Il file implementa il menù interattivo per controllare la simulazione degli AMM.
 
-from amm_uniswap import UniswapAMM
+from amm_uniswap import Un1iswapAMM
 from amm_constant_sum import ConstantSumAMM
 from trader import Trader
 from run_simulation import Simulation
