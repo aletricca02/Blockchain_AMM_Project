@@ -23,62 +23,87 @@ class ExperimentRunner:
     Ensures reproducibility through MASTER_SEED and generates comparative reports.
     """
     
-    def __init__(self, master_seed=42, output_dir="experiments_output"):
-        """
-        Initialize experiment runner.
-        
-        Args:
-            master_seed: Master seed for reproducibility
-            output_dir: Directory to save results
-        """
+    def __init__(self, master_seed=42, output_dir=None):
+        """Initialize experiment runner."""
         self.master_seed = master_seed
-        self.output_dir = output_dir
-        self.results = []  # Per i risultati aggregati (con repetitions)
-        self.individual_runs = []  # Per i singoli run (opzionale)
-        
-        # Create output directory if it doesn't exist
-        os.makedirs(output_dir, exist_ok=True)
-        
-        print(f"{'='*60}")
-        print(f"EXPERIMENT RUNNER INITIALIZED")
-        print(f"{'='*60}")
-        print(f"Master Seed: {master_seed}")
-        print(f"Output Directory: {output_dir}")
-        print(f"{'='*60}\n")
+        if output_dir is None:
+            # Usa la directory corrente se non è stata passata una cartella di output
+            self.output_dir = os.getcwd()  # Directory corrente
+        else:
+            self.output_dir = output_dir
+        self.results = []
+        self.raw_results = []
+        # Crea la directory di output se non esiste
+        os.makedirs(self.output_dir, exist_ok=True)
+
     
     def set_seed(self, seed):
         """Set all random seeds for reproducibility"""
         random.seed(seed)
         np.random.seed(seed)
 
+    def run_experiment_with_repetitions(self, num_runs=10):
+        """Run complete experimental suite with multiple repetitions"""
+        
+        # PULISCI risultati precedenti
+        self.results = []
+        
+        experiments = [
+            ("baseline", self.run_baseline_experiment, {}),
+            ("flash_crash", self.run_flash_crash_experiment, {"crash_magnitude": -0.5}),
+            ("whale_manipulation", self.run_whale_manipulation_experiment, {}),
+            ("high_volatility", self.run_high_volatility_experiment, {"volatility_multiplier": 5.0})
+        ]
+        
+        total_runs = len(experiments) * 2 * num_runs  # 4 exp × 2 AMMs × num_runs
+        current_run = 0
+        
+        for amm_type in ["uniswap", "constant_sum"]:
+            for exp_name, exp_func, params in experiments:
+                
+                run_results = []
+                
+                for run_idx in range(num_runs):
+                    current_run += 1
+                    # Progress indicator
+                    print(f"\r🔄 Progress: {current_run}/{total_runs} runs completed", end='', flush=True)
+                    
+                    seed_offset = run_idx * 1000 + hash(exp_name) % 1000
+                    
+                    # IMPORTANTE: non aggiungere a self.results qui
+                    result = exp_func(amm_type, seed_offset=seed_offset, **params)
+                    run_results.append(result)
+
+                    result_copy = result.copy()
+                    result_copy['run_id'] = run_idx
+                    self.raw_results.append(result_copy)
+                # Aggregate results
+                aggregated = self.aggregate_results(run_results, exp_name, amm_type)
+                self.results.append(aggregated)
+        
+        print("\n")  # New line dopo progress bar
+        
+        # Stampa riassunto finale
+        self.print_final_summary()
+
     def run_baseline_experiment(self, amm_type, steps=500, seed_offset=0):
-        """
-        Run baseline experiment with normal volatility.
-        
-        Args:
-            amm_type: "uniswap" or "constant_sum"
-            steps: Number of simulation steps
-            seed_offset: Offset to add to master seed
-            
-        Returns:
-            dict: Experiment results
-        """
+        """Run baseline experiment (COMPLETAMENTE SILENZIOSO)"""
         self.set_seed(self.master_seed + seed_offset)
+                
+        # DISABILITA tutti i print della simulazione
+        import sys
+        import io
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()  # Redirect output to nowhere
         
-        print(f"\n{'='*60}")
-        print(f"BASELINE EXPERIMENT: {amm_type.upper()}")
-        print(f"Steps: {steps} | Seed: {self.master_seed + seed_offset}")
-        print(f"{'='*60}")
+        try:
+            sim = Simulation(amm_type=amm_type)
+
+            for i in range(steps):
+                sim.step(verbose=False)
+        finally:
+            sys.stdout = old_stdout  # Restore output
         
-        sim = Simulation(amm_type=amm_type)
-        
-        # Run simulation
-        for i in range(steps):
-            sim.step(verbose=False)
-            if (i + 1) % 100 == 0:
-                print(f"Progress: {i+1}/{steps} steps")
-        
-        # Collect results
         stats = sim.get_stats()
         
         result = {
@@ -89,48 +114,31 @@ class ExperimentRunner:
             **stats
         }
         
-        self.results.append(result)
-        
-        print(f"✓ Baseline experiment completed for {amm_type}")
+        # NON aggiungere a self.results qui
         return result
-    
+
     def run_flash_crash_experiment(self, amm_type, crash_step=250, 
-                                   crash_magnitude=-0.5, total_steps=500, 
-                                   seed_offset=100):
-        """
-        Run experiment with flash crash event.
-        
-        Args:
-            amm_type: "uniswap" or "constant_sum"
-            crash_step: Step at which crash occurs
-            crash_magnitude: Crash percentage (e.g., -0.5 = -50%)
-            total_steps: Total simulation steps
-            seed_offset: Offset to add to master seed
-            
-        Returns:
-            dict: Experiment results
-        """
+                                crash_magnitude=-0.5, total_steps=500, 
+                                seed_offset=100):
+        """Run flash crash experiment (COMPLETAMENTE SILENZIOSO)"""
         self.set_seed(self.master_seed + seed_offset)
         
-        print(f"\n{'='*60}")
-        print(f"FLASH CRASH EXPERIMENT: {amm_type.upper()}")
-        print(f"Crash at step {crash_step}: {crash_magnitude:.0%}")
-        print(f"{'='*60}")
+        import sys
+        import io
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
         
-        sim = Simulation(amm_type=amm_type)
-        
-        # Run until crash
-        for i in range(crash_step):
-            sim.step(verbose=False)
-        
-        print(f"⚡ APPLYING FLASH CRASH: {crash_magnitude:.0%}")
-        sim.apply_market_shock(crash_magnitude)
-        
-        # Continue simulation
-        for i in range(crash_step, total_steps):
-            sim.step(verbose=False)
-            if (i + 1) % 100 == 0:
-                print(f"Progress: {i+1}/{total_steps} steps")
+        try:
+            sim = Simulation(amm_type=amm_type)
+            for i in range(crash_step):
+                sim.step(verbose=False)
+            
+            sim.apply_market_shock(crash_magnitude)
+            
+            for i in range(crash_step, total_steps):
+                sim.step(verbose=False)
+        finally:
+            sys.stdout = old_stdout
         
         stats = sim.get_stats()
         
@@ -144,55 +152,35 @@ class ExperimentRunner:
             **stats
         }
         
-        self.results.append(result)
-        
-        print(f"✓ Flash crash experiment completed for {amm_type}")
         return result
-    
+
     def run_whale_manipulation_experiment(self, amm_type, dump_step=200, 
-                                         pump_step=400, total_steps=600, 
-                                         seed_offset=200):
-        """
-        Run experiment with whale pump and dump.
-        
-        Args:
-            amm_type: "uniswap" or "constant_sum"
-            dump_step: Step at which dump occurs
-            pump_step: Step at which pump occurs
-            total_steps: Total simulation steps
-            seed_offset: Offset to add to master seed
-            
-        Returns:
-            dict: Experiment results
-        """
+                                        pump_step=400, total_steps=600, 
+                                        seed_offset=200):
+        """Run whale manipulation experiment (COMPLETAMENTE SILENZIOSO)"""
         self.set_seed(self.master_seed + seed_offset)
         
-        print(f"\n{'='*60}")
-        print(f"WHALE MANIPULATION EXPERIMENT: {amm_type.upper()}")
-        print(f"Dump at step {dump_step} | Pump at step {pump_step}")
-        print(f"{'='*60}")
+        import sys
+        import io
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()  # Redirect output to nowhere
         
-        sim = Simulation(amm_type=amm_type)
-        
-        # Run until dump
-        for i in range(dump_step):
-            sim.step(verbose=False)
-        
-        print(f"🐋 WHALE DUMP")
-        sim.whale_dump(percent=0.5)
-        
-        # Run until pump
-        for i in range(dump_step, pump_step):
-            sim.step(verbose=False)
-        
-        print(f"🐋 WHALE PUMP")
-        sim.whale_pump(percent=0.5)
-        
-        # Continue simulation
-        for i in range(pump_step, total_steps):
-            sim.step(verbose=False)
-            if (i + 1) % 100 == 0:
-                print(f"Progress: {i+1}/{total_steps} steps")
+        try:
+            sim = Simulation(amm_type=amm_type)
+            for i in range(dump_step):
+                sim.step(verbose=False)
+            
+            sim.whale_dump(percent=0.5)
+            
+            for i in range(dump_step, pump_step):
+                sim.step(verbose=False)
+            
+            sim.whale_pump(percent=0.5)
+            
+            for i in range(pump_step, total_steps):
+                sim.step(verbose=False)
+        finally:
+            sys.stdout = old_stdout
         
         stats = sim.get_stats()
         
@@ -206,69 +194,42 @@ class ExperimentRunner:
             **stats
         }
         
-        self.results.append(result)
-        
-        print(f"✓ Whale manipulation experiment completed for {amm_type}")
         return result
-    
+
     def run_high_volatility_experiment(self, amm_type, steps=500, 
-                                      volatility_multiplier=5.0, 
-                                      seed_offset=300):
-        """
-        Run experiment with high market volatility.
-        
-        Args:
-            amm_type: "uniswap" or "constant_sum"
-            steps: Number of simulation steps
-            volatility_multiplier: Multiply base volatility by this factor
-            seed_offset: Offset to add to master seed
-            
-        Returns:
-            dict: Experiment results
-        """
+                                    volatility_multiplier=5.0, 
+                                    seed_offset=300):
+        """Run high volatility experiment (COMPLETAMENTE SILENZIOSO)"""
         self.set_seed(self.master_seed + seed_offset)
+        import sys
+        import io
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
         
-        print(f"\n{'='*60}")
-        print(f"HIGH VOLATILITY EXPERIMENT: {amm_type.upper()}")
-        print(f"Volatility multiplier: {volatility_multiplier}x")
-        print(f"{'='*60}")
+        try:
+            sim = Simulation(amm_type=amm_type)
+
+        finally:
+            sys.stdout = old_stdout
         
-        sim = Simulation(amm_type=amm_type)
-        
-        # Temporarily increase volatility
-        # Note: This modifies the step() method's volatility range
         original_step = sim.step
         
         def high_volatility_step(verbose=False):
-            """Modified step with higher volatility"""
             sim.step_count += 1
             
-            if verbose:
-                print(f"\n{'='*60}")
-                print(f"TICK {sim.step_count}")
-                print(f"{'='*60}")
-            
-            # Higher volatility: ±10% instead of ±2%
             base_vol = 0.02
             change_pct = random.uniform(-base_vol * volatility_multiplier, 
-                                       base_vol * volatility_multiplier)
+                                    base_vol * volatility_multiplier)
             sim.market_price *= (1 + change_pct)
             volatility = abs(change_pct)
             
-            if verbose:
-                print(f"Market movement: {change_pct:+.2%} → New price: {sim.market_price:.2f} USDC/ETH")
-            
-            # Arbitrageur attempts to close price gaps
             sim.arb.act(sim.amm, sim.market_price)
             
-            # Retail traders
             for t in sim.traders:
-                t.act(sim.amm, strategy="random", verbose=verbose)
+                t.act(sim.amm, strategy="random", verbose=False)
             
-            # LP monitors volatility
             sim.lp.check_stress(sim.amm, volatility)
             
-            # Log data
             sim.price_log.append({
                 "step": sim.step_count,
                 "amm_price": sim.amm.get_price_x_to_y(),
@@ -279,18 +240,19 @@ class ExperimentRunner:
                 "k": sim.amm.get_k(),
                 "volatility": volatility
             })
-            
-            if verbose:
-                print(f"{'='*60}")
         
-        # Replace step method temporarily
         sim.step = high_volatility_step
         
-        # Run simulation
-        for i in range(steps):
-            sim.step(verbose=False)
-            if (i + 1) % 100 == 0:
-                print(f"Progress: {i+1}/{steps} steps")
+        import sys
+        import io
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        
+        try:
+            for i in range(steps):
+                sim.step(verbose=False)
+        finally:
+            sys.stdout = old_stdout
         
         stats = sim.get_stats()
         
@@ -303,122 +265,68 @@ class ExperimentRunner:
             **stats
         }
         
-        self.results.append(result)
-        
-        print(f"✓ High volatility experiment completed for {amm_type}")
         return result
-    
-    def run_experiment_with_repetitions(self, experiment_func, amm_type, 
-                                    num_runs=10, **kwargs):
-        """
-        Run an experiment multiple times and collect statistics.
-        
-        Args:
-            experiment_func: Function to run (e.g., self.run_baseline_experiment)
-            amm_type: "uniswap" or "constant_sum"
-            num_runs: Number of repetitions
-            **kwargs: Parameters to pass to experiment_func
-            
-        Returns:
-            dict: Aggregated results with mean, std, min, max
-        """
-        print(f"\n{'='*60}")
-        print(f"RUNNING {num_runs} REPETITIONS: {amm_type.upper()}")
-        print(f"{'='*60}")
-        
-        all_runs = []
-        
-        # IMPORTANTE: Salva temporaneamente self.results
-        temp_results = self.results.copy()
-        self.results = []  # Svuota per raccogliere solo i run correnti
-        
-        for run_id in range(num_runs):
-            print(f"\n[Run {run_id+1}/{num_runs}]")
-            
-            # Use different seed for each run
-            seed_offset = kwargs.get('seed_offset', 0) + run_id * 1000
-            kwargs['seed_offset'] = seed_offset
-            
-            result = experiment_func(amm_type, **kwargs)
-            all_runs.append(result)
-        
-        # Salva tutti i run individuali (opzionale)
-        self.individual_runs.extend(all_runs)
-        
-        # Ripristina self.results
-        self.results = temp_results
-        
-        # Aggregate results
-        df_runs = pd.DataFrame(all_runs)
-        
-        # Calculate statistics
-        aggregated = {
-            "experiment": all_runs[0]["experiment"],
-            "amm_type": amm_type,
-            "num_runs": num_runs,
-            "steps": all_runs[0]["steps"],
-            "seed_base": self.master_seed
-        }
-        
-        # Metrics to aggregate
-        metrics = ['avg_price_gap', 'max_price_gap', 'price_stability', 
-                'k_growth_percent', 'arb_profit', 'arb_trades', 
-                'lp_panic_events', 'total_swaps', 'avg_volatility', 
-                'max_volatility']
-        
-        for metric in metrics:
-            if metric in df_runs.columns:
-                aggregated[f"{metric}_mean"] = df_runs[metric].mean()
-                aggregated[f"{metric}_std"] = df_runs[metric].std()
-                aggregated[f"{metric}_min"] = df_runs[metric].min()
-                aggregated[f"{metric}_max"] = df_runs[metric].max()
-        
-        # Boolean aggregation for lp_exited (percentage of runs where LP exited)
-        if 'lp_exited' in df_runs.columns:
-            aggregated['lp_exit_rate'] = df_runs['lp_exited'].mean()
-        
-        self.results.append(aggregated)
-        
-        print(f"\n✓ Completed {num_runs} runs for {amm_type}")
-        print(f"   Mean price gap: {aggregated.get('avg_price_gap_mean', 0):.4f} ± {aggregated.get('avg_price_gap_std', 0):.4f}")
-        print(f"   Mean arb profit: {aggregated.get('arb_profit_mean', 0):.2f} ± {aggregated.get('arb_profit_std', 0):.2f}")
-        
-        return aggregated
 
-
-    def run_all_experiments_with_repetitions(self, num_runs=10):
-        """Run complete experimental suite with multiple repetitions"""
-        print(f"\n{'#'*60}")
-        print(f"RUNNING FULL EXPERIMENTAL SUITE ({num_runs} runs each)")
-        print(f"{'#'*60}\n")
+    def aggregate_results(self, run_results, exp_name, amm_type):
+        """Aggrega i risultati di più run"""
+        if not run_results:
+            return {}
         
-        experiments = [
-            ("baseline", self.run_baseline_experiment, {}),
-            ("flash_crash", self.run_flash_crash_experiment, 
-            {"crash_magnitude": -0.5}),
-            ("whale_manipulation", self.run_whale_manipulation_experiment, {}),
-            ("high_volatility", self.run_high_volatility_experiment, 
-            {"volatility_multiplier": 5.0})
+        numeric_metrics = [
+            'avg_price_gap', 'price_stability', 'k_growth_percent',
+            'arb_profit', 'lp_panic_events'
         ]
         
-        for amm_type in ["uniswap", "constant_sum"]:
-            print(f"\n{'*'*60}")
-            print(f"TESTING {amm_type.upper()} AMM")
-            print(f"{'*'*60}")
-            
-            for exp_name, exp_func, params in experiments:
-                self.run_experiment_with_repetitions(
-                    exp_func, 
-                    amm_type, 
-                    num_runs=num_runs,
-                    **params
-                )
+        aggregated = {
+            'experiment': exp_name,
+            'amm_type': amm_type,
+            'num_runs': len(run_results)
+        }
         
-        print(f"\n{'#'*60}")
-        print(f"ALL EXPERIMENTS COMPLETED")
-        print(f"Total runs: {len(self.results)} aggregated results")
-        print(f"({'×'.join([str(num_runs), '4 scenarios', '2 AMMs'])} = {num_runs*4*2} individual runs)")
-        print(f"{'#'*60}\n")
+        for metric in numeric_metrics:
+            values = [r[metric] for r in run_results if metric in r]
+            if values:
+                aggregated[f'{metric}_mean'] = np.mean(values)
+                aggregated[f'{metric}_std'] = np.std(values)
+        
+        return aggregated
+        
+    def print_final_summary(self):
+        """Stampa riassunto finale compatto di tutti gli esperimenti"""
+        print(f"\n{'#'*70}")
+        print(f"{'FINAL SUMMARY':^70}")
+        print(f"{'#'*70}\n")
+        
+        df = pd.DataFrame(self.results)
+        
+        for amm_type in ["uniswap", "constant_sum"]:
+            print(f"\n{'='*70}")
+            print(f"{amm_type.upper()} AMM - All Experiments")
+            print(f"{'='*70}")
+            
+            amm_data = df[df['amm_type'] == amm_type]
+            
+            for _, row in amm_data.iterrows():
+                exp_name = row['experiment'].replace('_', ' ').title()
+                print(f"\n  📊 {exp_name}")
+                print(f"     Price Gap:     {row['avg_price_gap_mean']:7.4f} ± {row['avg_price_gap_std']:.4f} USDC")
+                print(f"     Arb Profit:    {row['arb_profit_mean']:7.2f} ± {row['arb_profit_std']:.2f} USDC")
+                print(f"     Stability:     {row['price_stability_mean']:7.4f}")
+                print(f"     LP Panics:     {row['lp_panic_events_mean']:7.1f}")
+        
+        print(f"\n{'='*70}\n")
+
+    def print_experiment_summary(self, experiment_type, amm_type, results):
+        """Stampa un riassunto per ogni esperimento"""
+        print(f"\n{'='*60}")
+        print(f"{experiment_type.upper()} SUMMARY FOR {amm_type.upper()}")
+        print(f"{'='*60}")
+        print(f"Number of runs: {len(results)}")
+        print(f"Mean Price Gap: {results['avg_price_gap_mean']:.4f} ± {results['avg_price_gap_std']:.4f}")
+        print(f"Mean Arbitrage Profit: {results['arb_profit_mean']:.4f} ± {results['arb_profit_std']:.4f}")
+        print(f"Price Stability: {results['price_stability_mean']:.4f}")
+        print(f"LP Panic Events: {results['lp_panic_events_mean']:.4f}")
+        print(f"{'='*60}\n")
     
     def run_all_experiments(self):
         """Run complete experimental suite for both AMM types"""
@@ -453,85 +361,20 @@ class ExperimentRunner:
         print(f"Total experiments run: {len(self.results)}")
         print(f"{'#'*60}\n")
     
-    def generate_comparison_report(self):
-        """Generate comprehensive comparison report"""
-        if not self.results:
-            print("No results to analyze. Run experiments first!")
-            return
-        
-        df = pd.DataFrame(self.results)
-        
-        print(f"\n{'='*60}")
-        print(f"COMPARATIVE ANALYSIS REPORT")
-        print(f"{'='*60}\n")
-        
-        # Group by experiment type
-        for exp_type in df['experiment'].unique():
-            exp_df = df[df['experiment'] == exp_type]
-            
-            print(f"\n{'─'*60}")
-            print(f"EXPERIMENT: {exp_type.upper()}")
-            print(f"Number of runs per AMM: {exp_df['num_runs'].iloc[0]}")
-            print(f"{'─'*60}")
-            
-            comparison = exp_df.groupby('amm_type').agg({
-                'avg_price_gap_mean': 'first',
-                'avg_price_gap_std': 'first',
-                'max_price_gap_mean': 'first',
-                'price_stability_mean': 'first',
-                'k_growth_percent_mean': 'first',
-                'arb_profit_mean': 'first',
-                'arb_profit_std': 'first',
-                'arb_trades_mean': 'first',
-                'lp_panic_events_mean': 'first',
-                'lp_exit_rate': 'first'
-            }).round(4)
-            
-            # Rename columns for clarity
-            comparison.columns = [
-                'Avg Price Gap (mean)',
-                'Avg Price Gap (std)',
-                'Max Price Gap',
-                'Price Stability',
-                'K Growth %',
-                'Arb Profit (mean)',
-                'Arb Profit (std)',
-                'Arb Trades',
-                'LP Panic Events',
-                'LP Exit Rate'
-            ]
-            
-            print(comparison)
-            print()
-        
-        # Save AGGREGATED results to CSV
-        csv_path = os.path.join(self.output_dir, "experiment_results_aggregated.csv")
-        df.to_csv(csv_path, index=False)
-        print(f"✓ Aggregated results saved to: {csv_path}")
-        
-        # Save INDIVIDUAL runs to CSV (optional, for detailed analysis)
-        if self.individual_runs:
-            df_individual = pd.DataFrame(self.individual_runs)
-            csv_individual_path = os.path.join(self.output_dir, "experiment_results_individual.csv")
-            df_individual.to_csv(csv_individual_path, index=False)
-            print(f"✓ Individual run results saved to: {csv_individual_path}")
-        
-        # Save to JSON for detailed analysis
-        json_path = os.path.join(self.output_dir, "experiment_results_aggregated.json")
-        with open(json_path, 'w') as f:
-            json.dump(self.results, f, indent=2)
-        print(f"✓ Detailed aggregated results saved to: {json_path}")
     
     def plot_comparative_analysis(self):
         """Generate comparative visualizations with error bars"""
         if not self.results:
             print("No results to plot. Run experiments first!")
             return
-        
+        plt.close('all')
         df = pd.DataFrame(self.results)
         
+        # CHIUDI figure esistenti
+        plt.close('all')
+        
         # Create figure with subplots
-        fig, axes = plt.subplots(2, 3, figsize=(20, 12))
+        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
         fig.suptitle('AMM Comparative Analysis (mean ± std across runs)', 
                     fontsize=16, fontweight='bold')
         
@@ -549,7 +392,7 @@ class ExperimentRunner:
         ax1.legend(title='AMM Type')
         ax1.grid(axis='y', alpha=0.3)
         
-        # 2. Price Stability (lower is better)
+        # 2. Price Stability
         ax2 = axes[0, 1]
         pivot_mean = df.pivot(index='experiment', columns='amm_type', 
                             values='price_stability_mean')
@@ -563,67 +406,73 @@ class ExperimentRunner:
         ax2.legend(title='AMM Type')
         ax2.grid(axis='y', alpha=0.3)
         
-        # 4. Arbitrageur Profit
-        ax4 = axes[1, 0]
+        # 3. Arbitrageur Profit
+        ax3 = axes[1, 0]
         pivot_mean = df.pivot(index='experiment', columns='amm_type', 
                             values='arb_profit_mean')
         pivot_std = df.pivot(index='experiment', columns='amm_type', 
                             values='arb_profit_std')
-        pivot_mean.plot(kind='bar', ax=ax4, color=['#3498db', '#e74c3c'], 
+        pivot_mean.plot(kind='bar', ax=ax3, color=['#3498db', '#e74c3c'], 
                         yerr=pivot_std, capsize=4, error_kw={'linewidth': 2})
-        ax4.set_title('Arbitrageur Profit', fontweight='bold')
-        ax4.set_ylabel('USDC')
-        ax4.set_xlabel('')
-        ax4.legend(title='AMM Type')
-        ax4.grid(axis='y', alpha=0.3)
-        ax4.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5)
+        ax3.set_title('Arbitrageur Profit', fontweight='bold')
+        ax3.set_ylabel('USDC')
+        ax3.set_xlabel('')
+        ax3.legend(title='AMM Type')
+        ax3.grid(axis='y', alpha=0.3)
+        ax3.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5)
         
-        # 5. LP Panic Events
-        ax5 = axes[1, 1]
+        # 4. LP Panic Events
+        ax4 = axes[1, 1]
         pivot_mean = df.pivot(index='experiment', columns='amm_type', 
                             values='lp_panic_events_mean')
         pivot_std = df.pivot(index='experiment', columns='amm_type', 
                             values='lp_panic_events_std')
-        pivot_mean.plot(kind='bar', ax=ax5, color=['#3498db', '#e74c3c'], 
+        pivot_mean.plot(kind='bar', ax=ax4, color=['#3498db', '#e74c3c'], 
                         yerr=pivot_std, capsize=4, error_kw={'linewidth': 2})
-        ax5.set_title('LP Panic Events', fontweight='bold')
-        ax5.set_ylabel('Count')
-        ax5.set_xlabel('')
-        ax5.legend(title='AMM Type')
-        ax5.grid(axis='y', alpha=0.3)
+        ax4.set_title('LP Panic Events', fontweight='bold')
+        ax4.set_ylabel('Count')
+        ax4.set_xlabel('')
+        ax4.legend(title='AMM Type')
+        ax4.grid(axis='y', alpha=0.3)
         
-        # Save plot
+        plt.tight_layout()
+        
+        # Save plot - RIMUOVI file esistente prima
+        # Alla fine, ELIMINA file vecchio prima di salvare
         plot_path = os.path.join(self.output_dir, "comparative_analysis.png")
-        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-        print(f"✓ Comparative plots saved to: {plot_path}")
+        if os.path.exists(plot_path):
+            os.remove(plot_path)
         
-        plt.show()
-    
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        plt.close('all')  # Chiudi di nuovo
+
     def plot_heatmap_analysis(self):
         """Generate heatmap showing performance across dimensions"""
         if not self.results:
             print("No results to plot. Run experiments first!")
             return
-        
+        plt.close('all')
         df = pd.DataFrame(self.results)
+        
+        plt.close('all')
         
         # Select key metrics (use MEAN values)
         metrics = [
             'avg_price_gap_mean', 
             'price_stability_mean', 
-            'k_growth_percent_mean', 
-            'arb_profit_mean', 
+            'arb_profit_mean',
+            'lp_panic_events_mean'
         ]
         
         metric_labels = [
             'Avg Price Gap',
             'Price Stability',
-            'K Growth %',
             'Arb Profit',
+            'LP Panics'
         ]
         
         # Create pivot table for each metric
-        fig, axes = plt.subplots(1, len(metrics), figsize=(22, 4))
+        fig, axes = plt.subplots(1, len(metrics), figsize=(20, 4))
         fig.suptitle('Performance Heatmaps: Uniswap vs Constant Sum (mean values)', 
                     fontsize=14, fontweight='bold')
         
@@ -631,14 +480,14 @@ class ExperimentRunner:
             pivot = df.pivot(index='experiment', columns='amm_type', values=metric)
             
             # Choose colormap based on metric
-            if 'profit' in metric.lower() or 'growth' in metric.lower():
-                cmap = 'RdYlGn'  # Red=bad, Green=good
+            if 'profit' in metric.lower():
+                cmap = 'RdYlGn'
             else:
-                cmap = 'RdYlGn_r'  # Red=bad (high values), Green=good (low values)
+                cmap = 'RdYlGn_r'
             
             sns.heatmap(pivot, annot=True, fmt='.2f', cmap=cmap, 
                     ax=axes[idx], cbar_kws={'label': label},
-                    center=0 if 'profit' in metric.lower() or 'growth' in metric.lower() else None)
+                    center=0 if 'profit' in metric.lower() else None)
             axes[idx].set_title(label, fontweight='bold')
             axes[idx].set_xlabel('')
             axes[idx].set_ylabel('')
@@ -646,148 +495,69 @@ class ExperimentRunner:
         plt.tight_layout()
         
         # Save plot
-        heatmap_path = os.path.join(self.output_dir, "performance_heatmap.png")
-        plt.savefig(heatmap_path, dpi=300, bbox_inches='tight')
-        print(f"✓ Heatmap saved to: {heatmap_path}")
+        plot_path = os.path.join(self.output_dir, "performance_heatmap.png")
+        if os.path.exists(plot_path):
+            os.remove(plot_path)
         
-        plt.show()
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        plt.close('all')  # Chiudi di nuovo
 
-    def plot_uncertainty_analysis(self):
-        """Plot showing variability across runs - intuitive visualization of randomness impact"""
-        if not self.results:
-            print("No results to plot. Run experiments first!")
+    def plot_seed_distribution(self):
+        """Genera grafico dettagliato che mostra ogni singolo seed (Boxplot + Strip)"""
+        if not self.raw_results:
+            print("Nessun dato grezzo trovato.")
             return
+            
+        import seaborn as sns
+        import matplotlib.pyplot as plt
         
-        df = pd.DataFrame(self.results)
+        df_raw = pd.DataFrame(self.raw_results)
         
-        # Create 1x3 grid for clearer comparison
-        fig, axes = plt.subplots(1, 3, figsize=(20, 6))
-        fig.suptitle('Robustness Analysis: How Stable Are Results Across Different Random Seeds?', 
-                    fontsize=15, fontweight='bold')
+        # Pulisci i nomi per il grafico
+        df_raw['experiment'] = df_raw['experiment'].str.replace('_', ' ').str.title()
         
-        experiments = df['experiment'].unique()
-        x = np.arange(len(experiments))
-        width = 0.35
+        # Configurazione grafico
+        plt.close('all')
+        fig, axes = plt.subplots(1, 2, figsize=(18, 8))
+        fig.suptitle('Seed Variability Analysis: Individual Run Performance', 
+                    fontsize=16, fontweight='bold')
         
-        # Prepare data
-        uni_data = df[df['amm_type'] == 'uniswap'].sort_values('experiment')
-        cs_data = df[df['amm_type'] == 'constant_sum'].sort_values('experiment')
+        # Metriche da analizzare
+        metrics = [
+            ('avg_price_gap', 'Price Gap Distribution (USDC)', 0),
+            ('arb_profit', 'Arbitrageur Profit Distribution (USDC)', 1)
+        ]
         
-        # ============================================================
-        # GRAPH 1: Average Price Gap (with error bars)
-        # ============================================================
-        ax1 = axes[0]
+        colors = {'uniswap': '#3498db', 'constant_sum': '#e74c3c'}
         
-        uni_gap_mean = uni_data['avg_price_gap_mean'].values
-        uni_gap_std = uni_data['avg_price_gap_std'].values
-        cs_gap_mean = cs_data['avg_price_gap_mean'].values
-        cs_gap_std = cs_data['avg_price_gap_std'].values
-        
-        # Bars with error bars
-        bars1 = ax1.bar(x - width/2, uni_gap_mean, width, yerr=uni_gap_std,
-                    capsize=6, label='Uniswap', color='#3498db', 
-                    alpha=0.85, error_kw={'linewidth': 2.5, 'ecolor': '#2c3e50'})
-        bars2 = ax1.bar(x + width/2, cs_gap_mean, width, yerr=cs_gap_std,
-                    capsize=6, label='Constant Sum', color='#e74c3c', 
-                    alpha=0.85, error_kw={'linewidth': 2.5, 'ecolor': '#c0392b'})
-        
-        ax1.set_ylabel('Avg Price Gap (USDC)', fontweight='bold', fontsize=12)
-        ax1.set_title('Price Efficiency: Mean ± Std Dev', fontweight='bold', fontsize=13)
-        ax1.set_xticks(x)
-        ax1.set_xticklabels([e.replace('_', ' ').title() for e in experiments], 
-                        rotation=25, ha='right', fontsize=10)
-        ax1.legend(fontsize=11, loc='upper left')
-        ax1.grid(axis='y', alpha=0.3, linestyle='--')
-        
-        # Interpretation box
-        ax1.text(0.98, 0.97, 
-                '↓ Lower bars = Better price accuracy\n'
-                '↓ Shorter error bars = More predictable',
-                transform=ax1.transAxes, verticalalignment='top', horizontalalignment='right',
-                fontsize=9.5, bbox=dict(boxstyle='round', facecolor='#fffacd', alpha=0.9))
-        
-        # ============================================================
-        # GRAPH 2: Arbitrage Profit (with error bars)
-        # ============================================================
-        ax2 = axes[1]
-        
-        uni_profit_mean = uni_data['arb_profit_mean'].values
-        uni_profit_std = uni_data['arb_profit_std'].values
-        cs_profit_mean = cs_data['arb_profit_mean'].values
-        cs_profit_std = cs_data['arb_profit_std'].values
-        
-        # Bars with error bars
-        bars1 = ax2.bar(x - width/2, uni_profit_mean, width, yerr=uni_profit_std,
-                    capsize=6, label='Uniswap', color='#3498db', 
-                    alpha=0.85, error_kw={'linewidth': 2.5, 'ecolor': '#2c3e50'})
-        bars2 = ax2.bar(x + width/2, cs_profit_mean, width, yerr=cs_profit_std,
-                    capsize=6, label='Constant Sum', color='#e74c3c', 
-                    alpha=0.85, error_kw={'linewidth': 2.5, 'ecolor': '#c0392b'})
-        
-        ax2.axhline(y=0, color='black', linestyle='--', linewidth=1.5, alpha=0.6)
-        ax2.set_ylabel('Arbitrageur Profit (USDC)', fontweight='bold', fontsize=12)
-        ax2.set_title('Arbitrage Opportunities: Mean ± Std Dev', fontweight='bold', fontsize=13)
-        ax2.set_xticks(x)
-        ax2.set_xticklabels([e.replace('_', ' ').title() for e in experiments], 
-                        rotation=25, ha='right', fontsize=10)
-        ax2.legend(fontsize=11, loc='upper left')
-        ax2.grid(axis='y', alpha=0.3, linestyle='--')
-        
-        # Interpretation box
-        ax2.text(0.98, 0.97,
-                '↑ Higher profit = More price inefficiency\n'
-                '↓ Shorter bars = More consistent behavior',
-                transform=ax2.transAxes, verticalalignment='top', horizontalalignment='right',
-                fontsize=9.5, bbox=dict(boxstyle='round', facecolor='#fffacd', alpha=0.9))
-        
-        # ============================================================
-        # GRAPH 3: Coefficient of Variation (Consistency Score)
-        # ============================================================
-        ax3 = axes[2]
-        
-        # Calculate CV (%) - measures relative variability
-        uni_cv = (uni_gap_std / np.abs(uni_gap_mean)) * 100
-        cs_cv = (cs_gap_std / np.abs(cs_gap_mean)) * 100
-        
-        # Clean up any inf/nan values
-        uni_cv = np.nan_to_num(uni_cv, nan=0.0, posinf=0.0, neginf=0.0)
-        cs_cv = np.nan_to_num(cs_cv, nan=0.0, posinf=0.0, neginf=0.0)
-        
-        # Grouped bars
-        bars1 = ax3.bar(x - width/2, uni_cv, width,
-                    label='Uniswap', color='#3498db', alpha=0.85)
-        bars2 = ax3.bar(x + width/2, cs_cv, width,
-                    label='Constant Sum', color='#e74c3c', alpha=0.85)
-        
-        ax3.set_ylabel('Coefficient of Variation (%)', fontweight='bold', fontsize=12)
-        ax3.set_title('Result Stability Score', fontweight='bold', fontsize=13)
-        ax3.set_xticks(x)
-        ax3.set_xticklabels([e.replace('_', ' ').title() for e in experiments], 
-                        rotation=25, ha='right', fontsize=10)
-        ax3.legend(fontsize=11, loc='upper left')
-        ax3.grid(axis='y', alpha=0.3, linestyle='--')
-        
-        # Add reference line for "good" stability (CV < 10%)
-        ax3.axhline(y=10, color='green', linestyle=':', linewidth=2, alpha=0.5, 
-                label='Good stability (<10%)')
-        
-        # Interpretation box
-        ax3.text(0.98, 0.97,
-                'Lower % = More stable across seeds\n'
-                '<10% = Good consistency\n'
-                '>30% = High variability',
-                transform=ax3.transAxes, verticalalignment='top', horizontalalignment='right',
-                fontsize=9.5, bbox=dict(boxstyle='round', facecolor='#fffacd', alpha=0.9))
-        
-        plt.tight_layout()
-        
-        # Save plot
-        uncertainty_path = os.path.join(self.output_dir, "uncertainty_analysis.png")
-        plt.savefig(uncertainty_path, dpi=300, bbox_inches='tight')
-        print(f"✓ Uncertainty analysis saved to: {uncertainty_path}")
-        
-        plt.show()
+        for col_name, title, idx in metrics:
+            ax = axes[idx]
+            
+            # 1. Boxplot (mostra la distribuzione generale)
+            sns.boxplot(data=df_raw, x='experiment', y=col_name, hue='amm_type',
+                        ax=ax, palette=colors, showfliers=False, 
+                        boxprops={'alpha': 0.4}) # Trasparente per vedere i punti sotto
+            
+            # 2. Stripplot (i PUNTINI veri e propri)
+            sns.stripplot(data=df_raw, x='experiment', y=col_name, hue='amm_type',
+                        ax=ax, palette=colors, dodge=True, jitter=True, 
+                        alpha=0.8, s=6, edgecolor='black', linewidth=0.5)
+            
+            ax.set_title(title, fontweight='bold')
+            ax.set_xlabel('')
+            ax.set_ylabel('')
+            ax.grid(axis='y', alpha=0.3)
+            
+            # Sistema la legenda (ne crea due per colpa del doppio plot, ne teniamo una)
+            handles, labels = ax.get_legend_handles_labels()
+            ax.legend(handles[:2], labels[:2], title='AMM Type')
+            
+            if 'profit' in col_name:
+                ax.axhline(0, color='black', linestyle='--', alpha=0.5)
 
+        plt.tight_layout()
+        plot_path = os.path.join(self.output_dir, "seed_variability.png")
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
 def main():
     """Run complete experimental suite with repetitions"""
     
@@ -797,9 +567,9 @@ def main():
     # Ask user for number of repetitions
     print("\n" + "="*60)
     print("How many runs per experiment?")
-    print("  • 1 = Quick test (not statistically significant)")
+    print("  • 1 = Quick test")
     print("  • 10 = Good balance (recommended)")
-    print("  • 30 = High confidence (takes longer)")
+    print("  • 30 = High confidence")
     print("="*60)
     
     try:
@@ -809,30 +579,22 @@ def main():
     except ValueError:
         num_runs = 10
     
-    print(f"\n✓ Will run {num_runs} repetitions per experiment")
+    print(f"\n🔄 Running {num_runs} repetitions per experiment...")
+    print("Please wait...\n")
     
-    # Run all experiments with repetitions
-    runner.run_all_experiments_with_repetitions(num_runs=num_runs)
-    
-    # Generate reports
-    runner.generate_comparison_report()
-    
+    # Run all experiments SILENZIOSAMENTE
+    runner.run_experiment_with_repetitions(num_runs=num_runs)
+
     # Generate all visualizations
-    print("\nGenerating visualizations...")
+    print("\n📊 Generating visualizations...")
     runner.plot_comparative_analysis()
     runner.plot_heatmap_analysis()
-    runner.plot_uncertainty_analysis()  # NEW!
+    runner.plot_seed_distribution()
     
     print(f"\n{'='*60}")
-    print(f"EXPERIMENTAL SUITE COMPLETED")
+    print(f"✅ EXPERIMENTS COMPLETED")
     print(f"{'='*60}")
-    print(f"Total individual runs: {num_runs * 4 * 2} (= {num_runs} × 4 scenarios × 2 AMMs)")
-    print(f"Check '{runner.output_dir}' directory for:")
-    print(f"  • experiment_results.csv")
-    print(f"  • experiment_results.json")
-    print(f"  • comparative_analysis.png")
-    print(f"  • performance_heatmap.png")
-    print(f"  • uncertainty_analysis.png")
+    print(f"Check '{runner.output_dir}' directory for results")
     print(f"{'='*60}\n")
 
 
