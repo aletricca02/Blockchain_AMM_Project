@@ -58,7 +58,7 @@ class ExperimentRunner:
         total_runs = len(experiments) * 2 * num_runs  # 4 exp × 2 AMMs × num_runs
         current_run = 0
         
-        for amm_type in ["uniswap", "constant_sum"]:
+        for amm_type in ["uniswap", "constant_sum", "curve"]:
             for exp_name, exp_func, params in experiments:
                 
                 run_results = []
@@ -299,7 +299,7 @@ class ExperimentRunner:
         
         df = pd.DataFrame(self.results)
         
-        for amm_type in ["uniswap", "constant_sum"]:
+        for amm_type in ["uniswap", "constant_sum", "curve"]:
             print(f"\n{'='*70}")
             print(f"{amm_type.upper()} AMM - All Experiments")
             print(f"{'='*70}")
@@ -341,7 +341,7 @@ class ExperimentRunner:
             ("high_volatility", {"volatility_multiplier": 5.0})
         ]
         
-        for amm_type in ["uniswap", "constant_sum"]:
+        for amm_type in ["uniswap", "constant_sum", "curve"]:
             print(f"\n{'*'*60}")
             print(f"TESTING {amm_type.upper()} AMM")
             print(f"{'*'*60}")
@@ -384,13 +384,16 @@ class ExperimentRunner:
                             values='avg_price_gap_mean')
         pivot_std = df.pivot(index='experiment', columns='amm_type', 
                             values='avg_price_gap_std')
-        pivot_mean.plot(kind='bar', ax=ax1, color=['#3498db', '#e74c3c'], 
+        
+        pivot_mean.plot(kind='bar', ax=ax1, color=['#3498db', '#e74c3c', '#2ecc71'], 
                         yerr=pivot_std, capsize=4, error_kw={'linewidth': 2})
-        ax1.set_title('Average Price Gap', fontweight='bold')
-        ax1.set_ylabel('USDC')
+        
+        ax1.set_title('Average Price Gap (Log Scale)', fontweight='bold')
+        ax1.set_ylabel('USDC (Log Scale)')
+        ax1.set_yscale('log')  # <--- QUESTA È LA RIGA MAGICA
         ax1.set_xlabel('')
         ax1.legend(title='AMM Type')
-        ax1.grid(axis='y', alpha=0.3)
+        ax1.grid(axis='y', alpha=0.3, which="both") 
         
         # 2. Price Stability
         ax2 = axes[0, 1]
@@ -398,7 +401,7 @@ class ExperimentRunner:
                             values='price_stability_mean')
         pivot_std = df.pivot(index='experiment', columns='amm_type', 
                             values='price_stability_std')
-        pivot_mean.plot(kind='bar', ax=ax2, color=['#3498db', '#e74c3c'], 
+        pivot_mean.plot(kind='bar', ax=ax2, color=['#3498db', '#e74c3c', '#2ecc71'], 
                         yerr=pivot_std, capsize=4, error_kw={'linewidth': 2})
         ax2.set_title('Price Stability (lower = better)', fontweight='bold')
         ax2.set_ylabel('Std Dev')
@@ -412,7 +415,7 @@ class ExperimentRunner:
                             values='arb_profit_mean')
         pivot_std = df.pivot(index='experiment', columns='amm_type', 
                             values='arb_profit_std')
-        pivot_mean.plot(kind='bar', ax=ax3, color=['#3498db', '#e74c3c'], 
+        pivot_mean.plot(kind='bar', ax=ax3, color=['#3498db', '#e74c3c', '#2ecc71'], 
                         yerr=pivot_std, capsize=4, error_kw={'linewidth': 2})
         ax3.set_title('Arbitrageur Profit', fontweight='bold')
         ax3.set_ylabel('USDC')
@@ -427,7 +430,7 @@ class ExperimentRunner:
                             values='lp_panic_events_mean')
         pivot_std = df.pivot(index='experiment', columns='amm_type', 
                             values='lp_panic_events_std')
-        pivot_mean.plot(kind='bar', ax=ax4, color=['#3498db', '#e74c3c'], 
+        pivot_mean.plot(kind='bar', ax=ax4, color=['#3498db', '#e74c3c', '#2ecc71'], 
                         yerr=pivot_std, capsize=4, error_kw={'linewidth': 2})
         ax4.set_title('LP Panic Events', fontweight='bold')
         ax4.set_ylabel('Count')
@@ -512,11 +515,8 @@ class ExperimentRunner:
         import matplotlib.pyplot as plt
         
         df_raw = pd.DataFrame(self.raw_results)
-        
-        # Pulisci i nomi per il grafico
         df_raw['experiment'] = df_raw['experiment'].str.replace('_', ' ').str.title()
         
-        # Configurazione grafico
         plt.close('all')
         fig, axes = plt.subplots(1, 2, figsize=(18, 8))
         fig.suptitle('Seed Variability Analysis: Individual Run Performance', 
@@ -528,7 +528,7 @@ class ExperimentRunner:
             ('arb_profit', 'Arbitrageur Profit Distribution (USDC)', 1)
         ]
         
-        colors = {'uniswap': '#3498db', 'constant_sum': '#e74c3c'}
+        colors = {'uniswap': '#3498db', 'constant_sum': '#e74c3c', 'curve': '#2ecc71'}
         
         for col_name, title, idx in metrics:
             ax = axes[idx]
@@ -550,7 +550,7 @@ class ExperimentRunner:
             
             # Sistema la legenda (ne crea due per colpa del doppio plot, ne teniamo una)
             handles, labels = ax.get_legend_handles_labels()
-            ax.legend(handles[:2], labels[:2], title='AMM Type')
+            ax.legend(handles[:3], labels[:3], title='AMM Type')
             
             if 'profit' in col_name:
                 ax.axhline(0, color='black', linestyle='--', alpha=0.5)

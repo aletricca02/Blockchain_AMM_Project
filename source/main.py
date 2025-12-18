@@ -1,12 +1,10 @@
 # Il file implementa il menù interattivo per controllare la simulazione degli AMM.
 
-from amm_uniswap import Un1iswapAMM
+from amm_uniswap import UniswapAMM
 from amm_constant_sum import ConstantSumAMM
 from trader import Trader
 from run_simulation import Simulation
-
-import sys
-
+import sys, os
 def main():
 
     print("\n" + "="*60)
@@ -14,10 +12,11 @@ def main():
     print("="*60)
     print("1. Uniswap V2 (Constant Product: x × y = k)")
     print("2. Constant Sum (x + y = k)")
+    print("3. Curve StableSwap")
     print("="*60)
     
     while True:
-        choice = input("Choose AMM type (1 or 2): ").strip()
+        choice = input("Choose AMM type (1 or 2 or 3): ").strip()
         if choice == "1":
             amm_type = "uniswap"
             print("\n✓ Using Uniswap V2 (Constant Product)")
@@ -26,8 +25,12 @@ def main():
             amm_type = "constant_sum"
             print("\n✓ Using Constant Sum")
             break
+        elif choice == "3":
+            amm_type = "curve"  
+            print("\n✓ Using Curve StableSwap")
+            break
         else:
-            print("Invalid choice, please enter 1 or 2")
+            print("Invalid choice, please enter 1 or 2 or 3")
 
     # Create simulation with AMM selected
     sim = Simulation(amm_type=amm_type)
@@ -53,7 +56,7 @@ def main():
             choice = input("Choice: ").strip()
             
             if choice == "1":
-                sim.step()
+                sim.step(verbose = True)
                 print("Step completed.")
                 
             elif choice == "2":
@@ -62,9 +65,58 @@ def main():
                     if n <= 0:
                         print("Enter a positive number")
                         continue
+                    # 1. Salva lo stato INIZIALE
+                    start_price = sim.market_price
+                    start_amm_price = sim.amm.get_price_x_to_y()
+                    start_k = sim.amm.get_k()
+                    start_reserves_x = sim.amm.x
+                    start_reserves_y = sim.amm.y
+                    start_step = sim.step_count
+                    
+                    print(f"\n⏳ Execution of {n} step...", end="", flush=True)
+                
+                    arb_count = 0
+                    trader_swaps = 0
+                    old_stdout = sys.stdout
+                    sys.stdout = open(os.devnull, "w")
                     for i in range(n):
-                        sim.step(verbose=(i == n-1))  # only last one verbose
-                    print(f"✓ {n} steps completed")
+                        sim.step(False)
+                    
+                        if i % 10 == 0: print(".", end="", flush=True) 
+            
+                    
+                    sys.stdout.close()
+                    sys.stdout = old_stdout
+                    end_price = sim.market_price
+                    end_amm_price = sim.amm.get_price_x_to_y()
+                    end_k = sim.amm.get_k()
+                    
+                    delta_price = ((end_price - start_price) / start_price) * 100
+                    delta_amm_price = ((end_amm_price - start_amm_price) / start_amm_price) * 100
+                    k_growth = end_k - start_k
+                    
+                    print("="*60)
+                    print(f"📊 QUICK REPORT: STEP {start_step} → {sim.step_count} ({n} steps)")
+                    print("="*60)
+                    print("MARKET PRICE:")
+                    print(f"  Start: {start_price:.2f} USDC")
+                    print(f"  End:   {end_price:.2f} USDC")
+                    print(f"  Change: {delta_price:+.2f}%")
+                    print("-" * 30)
+                    print(f"AMM PRICE ({sim.amm_type.upper()}):")
+                    print(f"  Start: {start_amm_price:.2f} USDC")
+                    print(f"  End:   {end_amm_price:.2f} USDC")
+                    print(f"  Gap:   {abs(end_price - end_amm_price):.2f} USDC (vs market)")
+                    print("-" * 30)
+                    print("LIQUIDITY AND PROFIT (K):")
+                    print(f"  Start: {start_k:,.2f}")
+                    print(f"  End:   {end_k:,.2f}")
+                    print(f"  Growth: {k_growth:,.2f} (Fees collected)")
+                    print("-" * 30)
+                    print("CURRENT RESERVES:")
+                    print(f"  {sim.amm.x:.4f} ETH | {sim.amm.y:.2f} USDC")
+                    print("="*60)
+
                 except ValueError:
                     print("Please enter a valid number")
                     

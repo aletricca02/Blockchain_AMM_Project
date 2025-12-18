@@ -8,7 +8,7 @@ from trader import Trader, SmartTrader
 from agents import Arbitrageur, PanicLP, WhaleTrader
 import matplotlib.pyplot as plt
 import pandas as pd
-
+from amm_curve import CurveStableSwapAMM
 
 class Simulation:
     """
@@ -28,7 +28,7 @@ class Simulation:
         """Initialize simulation with default parameters.
         
         Args:
-            amm_type: Type of AMM to use ("uniswap" or "constant_sum")
+            amm_type: Type of AMM to use ("uniswap" or "constant_sum" OR "curve")
         """
 
         # Initialize AMM based on type, with 100 ETH and 200,000 USDC (price = 2000 USDC/ETH)
@@ -41,6 +41,10 @@ class Simulation:
             # This is INTENTIONAL to demonstrate CS is unsuitable for volatile pairs
             self.amm = ConstantSumAMM(token_x="ETH", token_y="USDC", 
                                       reserve_x=100, reserve_y=200000)
+        elif amm_type == "curve":
+             self.amm = CurveStableSwapAMM(token_x="ETH", token_y="USDC", 
+                                  reserve_x=100, reserve_y=200000,
+                                  amplification=100)
         else:
             raise ValueError(f"Unknown AMM type: {amm_type}. Use 'uniswap' or 'constant_sum'")
         
@@ -61,7 +65,7 @@ class Simulation:
         
         # Arbitrageur with substantial capital to close price gaps (~100% of pool)
         # Needs large capital because it must be able to close any gap
-        self.arb = Arbitrageur("ArbBot", capital_x=100, capital_y=200000)  # ~$400k (100%)
+        self.arb = Arbitrageur("ArbBot", capital_x=1500, capital_y=2500000)  # ~$4000k (100%)
         
         # Whale trader for manual pump/dump operations (~20% of pool)
         self.whale = WhaleTrader("Moby", capital_x=20, capital_y=40000)  # ~$80k (20%)
@@ -107,19 +111,37 @@ class Simulation:
         print(f"{'='*60}\n")
 
     def apply_market_shock(self, percent):
-        """
-        Apply an external market shock (simulates flash crash, pump, etc.).
-        
-        Args:
-            percent: Price change percentage (e.g., -0.3 for -30% crash)
-        """
-        old_price = self.market_price
-        self.market_price *= (1 + percent)
-        
-        print(f"\n{'⚡'*30}")
-        print(f"⚡ MARKET SHOCK APPLIED!")
-        print(f"⚡ Price: {old_price:.2f} → {self.market_price:.2f} USDC/ETH ({percent:+.1%})")
-        print(f"{'⚡'*30}\n")
+            """
+            Apply an external market shock.
+            """
+            old_price = self.market_price
+            self.market_price *= (1 + percent)
+            
+            print(f"\n{'⚡'*5}")
+            print(f"⚡ MARKET SHOCK APPLIED!")
+            print(f"⚡ Price: {old_price:.2f} → {self.market_price:.2f} USDC/ETH ({percent:+.1%})")
+            print(f"{'⚡'*5}\n")
+            
+            # --- AGGIUNGI QUESTO BLOCCO ---
+            # Calcola la volatilità come valore assoluto dello shock
+            shock_volatility = abs(percent)
+            
+            # Forza l'LP a controllare lo stress con questa nuova volatilità enorme
+            print("⚠️ Triggering LP stress check due to shock...")
+            self.lp.check_stress(self.amm, shock_volatility, verbose=True)
+            # ------------------------------
+            """
+            Trigger whale dump event (whale sells ETH).
+            
+            Args:
+                percent: Percentage of whale's ETH to dump (0-1, e.g., 0.5 = 50%)
+            """
+            print(f"\n{'🐋'*5}")
+            print(f"🐋 WHALE DUMP EVENT!")
+            print(f"🐋 Whale selling {percent:.0%} of ETH holdings")
+            print(f"{'🐋'*5}\n")
+            
+            self.whale.dump(self.amm, percent=percent)
 
     def whale_dump(self, percent=0.5):
         """
@@ -142,14 +164,14 @@ class Simulation:
         Args:
             percent: Percentage of whale's USDC to use for buying (0-1)
         """
-        print(f"\n{'🐋'*30}")
+        print(f"\n{'🐋'*5}")
         print(f"🐋 WHALE PUMP EVENT!")
         print(f"🐋 Whale buying ETH with {percent:.0%} of USDC")
-        print(f"{'🐋'*30}\n")
+        print(f"{'🐋'*5}\n")
         
         self.whale.pump(self.amm, percent=percent)
 
-    def step(self, verbose=True):
+    def step(self, verbose):
         """
         Advance simulation by one time step.
         
@@ -172,7 +194,7 @@ class Simulation:
             print(f"Market movement: {change_pct:+.2%} → New price: {self.market_price:.2f} USDC/ETH")
 
         # Arbitrageur attempts to close price gaps
-        self.arb.act(self.amm, self.market_price)
+        self.arb.act(self.amm, self.market_price, verbose=verbose)
 
         # Retail traders execute random trades
         for t in self.traders:
