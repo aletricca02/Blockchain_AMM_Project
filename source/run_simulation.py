@@ -122,7 +122,6 @@ class Simulation:
             print(f"⚡ Price: {old_price:.2f} → {self.market_price:.2f} USDC/ETH ({percent:+.1%})")
             print(f"{'⚡'*5}\n")
             
-            # --- AGGIUNGI QUESTO BLOCCO ---
             # Calcola la volatilità come valore assoluto dello shock
             shock_volatility = abs(percent)
             

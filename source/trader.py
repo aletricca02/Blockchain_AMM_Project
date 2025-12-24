@@ -197,40 +197,52 @@ class SmartTrader(Trader):
         self.max_slippage = max_slippage  # 2% max tolerated slippage
     
     def _try_buy(self, amm, verbose):
-        """Buys only if slippage is acceptable"""
+        """Buys only if slippage is acceptable (FIXED VERSION)"""
         if not self.can_afford("USDC", self.min_trade_usdc):
             return
         
         max_spend = min(self.wallet["USDC"], self.max_trade_usdc)
         usdc_in = random.uniform(self.min_trade_usdc, max_spend)
+                
+        # 1. Calcola quanto ETH riceverai realmente
+        actual_eth_out = amm.calculate_swap_output(usdc_in, amm.y, amm.x)
         
-        # Calculate expected slippage
-        current_price = amm.get_price_y_to_x()
-        expected_eth = usdc_in / current_price
-        actual_eth = amm.calculate_swap_output(usdc_in, amm.y, amm.x)
-        slippage = abs(actual_eth - expected_eth) / expected_eth
+        # 2. Calcola il prezzo effettivo dello swap
+        effective_price = usdc_in / actual_eth_out  # USDC per 1 ETH effettivo
+        
+        # 3. Calcola il prezzo spot di mercato (riferimento)
+        spot_price = amm.get_price_y_to_x()  # USDC per 1 ETH prima dello swap
+        
+        # 4. Slippage = differenza tra prezzo effettivo e prezzo spot
+        slippage = abs(effective_price - spot_price) / spot_price
         
         if slippage > self.max_slippage:
             if verbose:
                 print(f"[{self.name}] Slippage too high ({slippage:.2%}), skip buy")
             return
-        
+    
         # Proceed with the trade
         super()._try_buy(amm, verbose)
 
     def _try_sell(self, amm, verbose):
-        """Sells only if slippage is acceptable"""
+        """Sells only if slippage is acceptable (FIXED VERSION)"""
         if not self.can_afford("ETH", self.min_trade_eth):
             return
         
         max_sell = min(self.wallet["ETH"], self.max_trade_eth)
         eth_in = random.uniform(self.min_trade_eth, max_sell)
+                
+        # 1. Calcola quanto USDC riceverai realmente
+        actual_usdc_out = amm.calculate_swap_output(eth_in, amm.x, amm.y)
         
-        # Calculate expected slippage
-        current_price = amm.get_price_x_to_y()
-        expected_usdc = eth_in * current_price
-        actual_usdc = amm.calculate_swap_output(eth_in, amm.x, amm.y)
-        slippage = abs(actual_usdc - expected_usdc) / expected_usdc
+        # 2. Calcola il prezzo effettivo dello swap
+        effective_price = actual_usdc_out / eth_in  # USDC per 1 ETH effettivo
+        
+        # 3. Calcola il prezzo spot di mercato
+        spot_price = amm.get_price_x_to_y()  # USDC per 1 ETH prima dello swap
+        
+        # 4. Slippage = differenza tra prezzo effettivo e prezzo spot
+        slippage = abs(effective_price - spot_price) / spot_price
         
         if slippage > self.max_slippage:
             if verbose:

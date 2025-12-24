@@ -89,7 +89,7 @@ class CurveStableSwapAMM:
     
     def get_invariant(self):
         """
-        Calculate Curve's StableSwap invariant - FIXED
+        Calculate Curve's StableSwap invariant - simplified
         """
         x, y = self.x, self.y
         

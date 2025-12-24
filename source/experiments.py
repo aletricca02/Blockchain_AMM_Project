@@ -55,7 +55,7 @@ class ExperimentRunner:
             ("high_volatility", self.run_high_volatility_experiment, {"volatility_multiplier": 5.0})
         ]
         
-        total_runs = len(experiments) * 2 * num_runs  # 4 exp × 2 AMMs × num_runs
+        total_runs = len(experiments) * 3 * num_runs  # 4 exp × 3 AMMs × num_runs
         current_run = 0
         
         for amm_type in ["uniswap", "constant_sum", "curve"]:
@@ -208,11 +208,12 @@ class ExperimentRunner:
         
         try:
             sim = Simulation(amm_type=amm_type)
+            original_step = sim.step
 
         finally:
             sys.stdout = old_stdout
         
-        original_step = sim.step
+        
         
         def high_volatility_step(verbose=False):
             sim.step_count += 1
