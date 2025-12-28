@@ -58,9 +58,9 @@ class Simulation:
         
         # Retail traders with random behavior (~2-3% of pool each)
         self.traders = [
-            Trader("Alice", eth_amount=5, usdc_amount=1000),     # ~$11k (2.75%)
-            Trader("Bob", eth_amount=2, usdc_amount=3000),       # ~$7k (1.75%)
-            SmartTrader("Charlie", eth_amount=10, usdc_amount=10000, max_slippage=0.02)  # ~$30k (7.5%)
+            Trader("Alice", eth_amount=5, usdc_amount=1000),     # ~$11k tot (2.75%)
+            Trader("Bob", eth_amount=2, usdc_amount=3000),       # ~$7k tot (1.75%)
+            SmartTrader("Charlie", eth_amount=10, usdc_amount=10000, max_slippage=0.02)  # ~$30k tot (7.5%)
         ]
         
         # Arbitrageur with substantial capital to close price gaps (~100% of pool)
