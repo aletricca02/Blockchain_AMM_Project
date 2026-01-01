@@ -1,8 +1,8 @@
-# Il file implementa un Constant Product Market Maker (CPMM) tipo Uniswap V2 con:
-# - Gestione liquidità (add/remove)
-# - Swap con fee (0.3% default standard)
-# - Calcolo prezzi e slippage
-# - LP tokens basati su media geometrica
+# Uniswap Constant Product Market Maker (CPMM) implementation
+# - Liquidity management (add/remove)
+# - Swap with fees (0.3% default standard)
+# - Price calculation and slippage
+# - LP tokens
 
 import math
 

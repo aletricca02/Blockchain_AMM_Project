@@ -1,4 +1,3 @@
-# experiments.py
 # Automated experiment runner for comparing AMM models under various scenarios.
 # Uses MASTER_SEED for reproducibility and generates comparative analysis.
 

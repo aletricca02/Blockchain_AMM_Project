@@ -1,4 +1,4 @@
-# Il file implementa il menù interattivo per controllare la simulazione degli AMM.
+# Command-line interface implementation to control AMM simulation.
 
 from amm_uniswap import UniswapAMM
 from amm_constant_sum import ConstantSumAMM

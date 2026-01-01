@@ -1,5 +1,4 @@
-# agents.py
-# Agenti aggiornati per gestire correttamente il parametro 'verbose'
+# Arbitrageur, PanicLP and WhaleTrader
 
 import math
 

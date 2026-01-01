@@ -1,4 +1,3 @@
-# amm_constant_sum.py
 # Constant Sum Market Maker: x + y = k
 # Simpler than Uniswap but UNSTABLE under stress (could run out of tokens)
 # Designed for equal-value tokens only

@@ -1,7 +1,9 @@
-# Il file implementa un trader retail con comportamente casuale, che può:
-# - Comprare ETH con USDC
-# - Vendere ETH per USDC
-# - Restare fermo ("hold")
+# Retail trader implementation with random behavior. Can:
+# - Buy ETH with USDC
+# - Sell ETH for USDC
+# - Do nothing ("hold")
+
+# Smart trader implementation (avoids bad trades with high slippage).
 
 import random
 

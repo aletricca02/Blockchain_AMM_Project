@@ -1,4 +1,3 @@
-# amm_curve.py
 # Curve StableSwap AMM implementation
 # Designed for stablecoins but tested on ETH/USDC to demonstrate design trade-offs
 
